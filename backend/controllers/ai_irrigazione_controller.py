@@ -1,144 +1,116 @@
 from datetime import datetime
 from fastapi import HTTPException
 
+# Importiamo i tuoi servizi esistenti per il recupero dati
 from utils.ai_inputs_aggregator import get_inputs as aggregate_inputs
-from utils.ai_irrigation_service import compute as compute_irrigation
-from utils.weather_service import get_weather  # fallback leggero
-from utils.ai_explainer_service import explain_irrigation  # LLM spiegazione
+from controllers.sensor_controller import get_latest_readings
+from utils.ai_explainer_service import explain_irrigation
 
+# Importiamo la NUOVA Pipeline
+from backend.services.pipeline import GardeningPipelineService
 
-def compute_for_plant(plant: dict):
+# Istanza Singleton del servizio pipeline
+pipeline_service = GardeningPipelineService()
+
+async def compute_for_plant(plant: dict):
     """
-    Restituisce il consiglio AI di irrigazione per una singola pianta.
-    Pipeline:
-      1) Aggregatore (NASA/OM/Copernicus) → 'agg'
-      2) Motore fuzzy (FAO-like) → 'decision'
-      3) Spiegazione LLM (non bloccante) → 'explanationLLM'
-    Esporta SEMPRE i campi meteo attesi dalla Card (temp, humidity, rainNext24h, soil*).
-    Aggiunge inoltre:
-      - tech (fuzzy memberships, regole, punteggi)
-      - meta.weather con campi avanzati (et0, radiazione, vento, precipDaily)
-      - _debug per retro-compatibilità
-      - generatedAt timestamp ISO
+    Endpoint logico per calcolare il consiglio AI.
+    1. Recupera dati esterni (NASA/Meteo) e interni (Sensori IoT).
+    2. Esegue la Pipeline a 5 step.
+    3. Genera spiegazione LLM e formatta la risposta.
     """
     if not plant:
         raise HTTPException(status_code=404, detail="Pianta non trovata")
-
+    
     now = datetime.utcnow()
 
-    # 1) Aggrega input (profilo FAO, meteo, ecc.)
+    # 1. DATI ESTERNI (Agregatore esistente)
+    # Recupera meteo, profilo FAO, dati Copernicus
     agg = aggregate_inputs(plant, now=now) or {}
 
-    # 2) Normalizza 'weather' (garantiamo i campi attesi dalla Card)
-    wx = agg.get("weather") or {}
-    # Se per qualche motivo non abbiamo nulla, prova fallback Open-Meteo
-    if not wx and plant.get("geoLat") is not None and plant.get("geoLng") is not None:
-        fallback = get_weather(plant["geoLat"], plant["geoLng"]) or {}
-        wx = {**wx, **fallback}
-
-    # Chiavi base per la Card (non toccare: la UI si aspetta questi)
-    card_weather = {
-        "temp": wx.get("temp"),
-        "humidity": wx.get("humidity"),
-        "rainNext24h": wx.get("rainNext24h"),
-        "soilMoistureApprox": wx.get("soilMoistureApprox"),
-        "soilMoisture0to7cm": wx.get("soilMoisture0to7cm"),
-    }
-    # meta.weather = full (anche et0/vento/radiazione/precipDaily)
-    meta_weather = {**wx, **card_weather}
-
-    # 3) Decisione fuzzy (usa wx normalizzato)
-    decision = compute_irrigation(plant=plant, weather=wx, now=now) or {}
-
-    # 4) Spiegazione LLM (non blocca: se fallisce → fallback interno)
+    # 2. DATI LOCALI (Sensori IoT)
+    local_sensor_data = {}
     try:
-        llm = explain_irrigation(plant=plant, agg=agg, decision=decision, now=now) or {}
+        loc = plant.get("location")
+        if loc:
+            # get_latest_readings è ASYNC, usiamo await
+            readings = await get_latest_readings(location=loc)
+            
+            # Cerchiamo specificamente il sensore di umidità del suolo
+            # (Compatibile con la struttura che hai in sensor_simulator/controller)
+            soil = readings.get("soil_moisture") or readings.get("moisture")
+            if soil:
+                local_sensor_data = {
+                    "value": soil.get("value"),
+                    "unit": soil.get("unit"),
+                    "timestamp": soil.get("timestamp")
+                }
+    except Exception as e:
+        print(f"[AI Controller] Warning lettura sensori: {e}")
+        # Non blocchiamo: la pipeline gestirà l'assenza di sensori nel DataValidator
+
+    # 3. ESECUZIONE PIPELINE
+    # Passiamo tutto al motore che esegue Validator -> Features -> Strategy -> Anomaly -> Action
+    ctx = pipeline_service.run(plant, agg, local_sensor_data)
+    
+    # Estraiamo i risultati finali dal contesto
+    decision = ctx.estimation
+    anomalies = ctx.anomalies
+    suggestion = ctx.suggestion # "Annaffiare / Non annaffiare + quantità"
+    
+    # 4. SPIEGAZIONE LLM (Opzionale)
+    # Usiamo il risultato della pipeline per alimentare l'explainer LLM esistente
+    llm_result = {"text": None}
+    try:
+        # Passiamo la decisione calcolata dalla pipeline all'explainer
+        # Nota: L'explainer si aspetta 'recommendation', che è presente in decision
+        llm_result = explain_irrigation(plant=plant, agg=agg, decision=decision, now=now)
     except Exception:
-        llm = {"text": None, "usedLLM": False, "model": None, "tokens": None}
+        pass
 
-    # 5) Risposta per il frontend
-    result = {
-        "recommendation": decision.get("recommendation"),
-        "reason": decision.get("reason"),
+    # 5. FORMATTAZIONE RISPOSTA (Compatibile col Frontend React)
+    wx = agg.get("weather") or {}
+    
+    return {
+        "plantId": str(plant.get("_id")),
+        
+        # Risultato Core Pipeline
+        "recommendation": decision.get("recommendation"), # irrigate_today / irrigate_tomorrow / skip
+        "reason": suggestion,                             # Messaggio generato dall'ActionGenerator Step
+        "confidence": decision.get("confidence", 0.0),
         "nextDate": decision.get("nextDate"),
-        "confidence": decision.get("confidence"),
-
-        # segnali esposti (inclusi quelli usati dalla Card)
+        
+        # Dati e Segnali (Per la UI Card)
         "signals": {
-            "daysSinceLast": (decision.get("signals") or {}).get("daysSinceLast"),
-            "baselineInterval": (decision.get("signals") or {}).get("baselineInterval"),
-            "rainNext24h": card_weather["rainNext24h"],
-            "temp": card_weather["temp"],
-            "humidity": card_weather["humidity"],
-            # soil usato dal fuzzy (converge da 0-7cm o approx dentro ai_utils)
-            "soilMoisture": (decision.get("signals") or {}).get("soilMoisture"),
-            "soilMoistureApprox": card_weather["soilMoistureApprox"],
-            "soilMoisture0to7cm": card_weather["soilMoisture0to7cm"],
-            "et0": (agg.get("weather") or {}).get("et0"),
-            "hadGeo": bool(plant.get("geoLat") and plant.get("geoLng")),
+            # Se c'è il sensore locale usa quello, altrimenti la stima
+            "soilMoisture": local_sensor_data.get("value") or wx.get("soilMoistureApprox"),
+            "rainNext24h": wx.get("rainNext24h"),
+            "temp": wx.get("temp"),
+            "humidity": wx.get("humidity"),
+            # Nuovi campi generati dalla pipeline
+            "anomalies": anomalies, 
+            "features": ctx.features,
+            "estimatedAmount": decision.get("estimated_amount_ml")
         },
-
-        # meteo per la Card (sintetico)
-        "weather": card_weather,
-
-        # meta per il Drawer (completo)
+        
+        # Metadati Tecnici (Per il Drawer 'Dettagli AI')
         "meta": {
-            "weather": meta_weather,     # include et0 / vento / radiazione / precipDaily (se presenti)
+            "weather": wx,
             "profile": agg.get("profile"),
-            "sources": agg.get("raw"),   # raw: nasa/openmeteo/soil
-            "geo": {
-                "lat": plant.get("geoLat"),
-                "lng": plant.get("geoLng"),
-            },
-            "fuzzy": decision.get("tech"),  # memberships / regole / scores
+            "fuzzy": decision.get("tech"), # Dettagli membership fuzzy
+            "pipeline_valid": ctx.is_valid
         },
-
-        #  spiegazione generativa pronta da mostrare nel Drawer
-        "explanationLLM": llm.get("text"),
+        
+        # Spiegazione Generativa
+        "explanationLLM": llm_result.get("text"),
         "explanationMeta": {
-            "usedLLM": llm.get("usedLLM"),
-            "model": llm.get("model"),
-            "tokens": llm.get("tokens"),
-            "error": llm.get("error"),
+             "usedLLM": llm_result.get("usedLLM"),
+             "model": llm_result.get("model")
         },
-
-        # comodo: esportiamo anche 'tech' top-level (mirror di meta.fuzzy)
-        "tech": decision.get("tech"),
-
-        # compatibilità per vecchie Card che leggevano _debug.weather
-        "_debug": {
-            "weather": meta_weather,
-            "profile": agg.get("profile"),
-            "sources": agg.get("raw"),
-            "geo": {
-                "lat": plant.get("geoLat"),
-                "lng": plant.get("geoLng"),
-            },
-        },
-
-        # timestamp generazione risposta lato backend
-        "generatedAt": now.isoformat() + "Z",
+        
+        "generatedAt": now.isoformat() + "Z"
     }
 
-    return result
-
-def compute_batch(plants: list):
-    """
-    Calcola il consiglio AI per una lista di piante.
-    Mantiene compatibilità con routers/plantsRouter.py che importa compute_batch.
-    Ritorna una lista di record: [{ id, ...risultato } | { id, error }]
-    """
-    results = []
-    for p in (plants or []):
-        # prova ad estrarre un id leggibile (sia _id Mongo che id string)
-        pid = str(p.get("_id") or p.get("id") or "")
-        try:
-            res = compute_for_plant(p)
-            # includi l'id in cima per comodità del frontend
-            results.append({ "id": pid, **res })
-        except Exception as e:
-            results.append({
-                "id": pid,
-                "error": str(e)
-            })
-    return results
+async def compute_batch(plant_ids: list, current_user: dict):
+    # Placeholder per implementazione futura batch
+    return []
