@@ -3,14 +3,14 @@ from datetime import datetime
 from typing import List, Optional, Dict, Any
 from bson import ObjectId
 
-from backend.config import settings
-from backend.controllers.interventionsController import interventions_collection
-from backend.database import db
-from backend.models.plantModel import PlantCreate, PlantUpdate, serialize_plant
-from backend.utils.images import save_image_bytes
+from config import settings
+from controllers.interventionsController import interventions_collection
+from database import db
+from models.plantModel import PlantCreate, PlantUpdate, serialize_plant
+from utils.images import save_image_bytes
 
 try:
-    from backend.utils.trefle_service import fetch_plant_by_id, derive_defaults_from_trefle_data
+    from utils.trefle_service import fetch_plant_by_id, derive_defaults_from_trefle_data
     TREFLE_AVAILABLE = True
 except Exception:
     # Se il modulo non esiste o manca il token, continuiamo senza rompere nulla.

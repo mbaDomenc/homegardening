@@ -4,9 +4,9 @@ from datetime import datetime, timedelta
 from jose import jwt, JWTError
 from pymongo.collection import Collection
 from bson import ObjectId
-from backend.utils.images import save_image_bytes
-from backend.database import db
-from backend.config import JWT_SECRET, JWT_ALGORITHM, JWT_EXPIRATION_MINUTES
+from utils.images import save_image_bytes
+from database import db
+from config import JWT_SECRET, JWT_ALGORITHM, JWT_EXPIRATION_MINUTES
 
 pwd_context = CryptContext(schemes=["bcrypt"], deprecated="auto")
 

@@ -1,6 +1,6 @@
 from fastapi import HTTPException
-from backend.utils.geocoding import get_coordinates_from_city
-from backend.utils.weather_service import get_weather
+from utils.geocoding import get_coordinates_from_city
+from utils.weather_service import get_weather
 
 async def get_weather_by_city(city: str):
     coords = await get_coordinates_from_city(city)

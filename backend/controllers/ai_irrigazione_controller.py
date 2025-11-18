@@ -1,10 +1,10 @@
 from datetime import datetime
 from fastapi import HTTPException
 
-from backend.utils.ai_inputs_aggregator import get_inputs as aggregate_inputs
-from backend.utils.ai_irrigation_service import compute as compute_irrigation
-from backend.utils.weather_service import get_weather  # fallback leggero
-from backend.utils.ai_explainer_service import explain_irrigation  # LLM spiegazione
+from utils.ai_inputs_aggregator import get_inputs as aggregate_inputs
+from utils.ai_irrigation_service import compute as compute_irrigation
+from utils.weather_service import get_weather  # fallback leggero
+from utils.ai_explainer_service import explain_irrigation  # LLM spiegazione
 
 
 def compute_for_plant(plant: dict):

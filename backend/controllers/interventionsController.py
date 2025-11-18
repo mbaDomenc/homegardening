@@ -2,8 +2,8 @@ from datetime import datetime, timezone
 from typing import List, Optional, Union
 from bson import ObjectId
 
-from backend.database import db
-from backend.models.interventionModel import (
+from database import db
+from models.interventionModel import (
     InterventionCreate, InterventionUpdate, serialize_intervention
 )
 
