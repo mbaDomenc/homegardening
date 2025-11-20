@@ -42,8 +42,6 @@ def serialize_user_public(doc: dict) -> dict:
 
 # UTILS PASSWORD->  INDICA LA PASSWORD PER LA REGISTRAZIONE DELL'UTENTE, STO MODIFICANDO LALUNGHEZZA DELLA PASSWORD NELLO SPECIFICO
 
-# Configura il contesto per l'hashing (bcrypt è l'algoritmo di default qui)
-pwd_context = CryptContext(schemes=["bcrypt"], deprecated="auto")
 
 #INDICA LA LUNGHEZZA MASSIMA DELLA PASSWORD ACCETTATA DA bycrypt
 BCRYPT_MAX_LENGTH = 72 #indica la lunghezza della password in bytes
