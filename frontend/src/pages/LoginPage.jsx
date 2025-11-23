@@ -123,6 +123,7 @@ const LoginPage = () => {
                   value={formData.password}
                   onChange={handleChange}
                   required
+                  maxLength={72}
                   className="w-full px-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-green-500 focus:border-transparent transition-colors pr-10"
                   placeholder="La tua password"
                 />

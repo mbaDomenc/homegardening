@@ -1,65 +1,123 @@
-//Questo componente gestisce l'input del form e chiama il servizio API, usando PipelineResultCard per la visualizzazione.
-
-// src/pages/PipelineTestPage.jsx
 import React, { useState } from 'react';
-import { Brain, Droplets, Settings, RefreshCw, AlertTriangle } from 'lucide-react';
+import { 
+    Brain, MapPin, Sprout, Thermometer, 
+    Droplets, Sun, CloudRain, AlertTriangle, Search, ArrowRight
+} from 'lucide-react';
 import { processPipeline } from '../api/pipelineApi';
+import { api } from '../api/axiosInstance'; 
+import PlaceAutocomplete from '../components/PlaceAutocomplete';
 import PipelineResultCard from '../components/PipelineResultCard';
 import RequireAuth from '../components/RequireAuth';
-import { Link } from 'react-router-dom';
-
-
-const DEFAULT_INPUT = {
-    soil_moisture: 45.0,
-    temperature: 24.5,
-    humidity: 62.0,
-    light: 15000.0,
-    rainfall: 0.0,
-};
 
 const SUPPORTED_PLANTS = ["tomato", "lettuce", "basil", "pepper", "cucumber", "generic"];
 
+// 🟢 NUOVA LISTA TIPI DI TERRENO PER IL SELECT
+const SUPPORTED_SOILS = [
+    { id: 'franco', label: 'Lavorabile (Medio impasto)' },
+    { id: 'universale', label: 'Universale (Standard)' },
+    { id: 'argilloso', label: 'Argilloso (Pesante)' },
+    { id: 'sabbioso', label: 'Sabbioso (Drenante)' },
+    { id: 'acido', label: 'Acido (es. Mirtilli)' },
+    { id: 'torboso', label: 'Torboso' }
+];
 
 export default function PipelineTestPage() {
-    // Stato per l'input dei sensori
-    const [inputData, setInputData] = useState(DEFAULT_INPUT);
+    // Input Utente
     const [plantType, setPlantType] = useState('tomato');
-    
-    // Stato per il risultato della pipeline
+    const [location, setLocation] = useState('');
+    const [geoData, setGeoData] = useState(null); 
+    const [soilType, setSoilType] = useState('franco'); // 🟢 NUOVO STATO PER IL TERRENO
+
+    // Output Sistema
     const [result, setResult] = useState(null);
+    const [weatherData, setWeatherData] = useState(null);
+    
+    // Stati Interfaccia
     const [loading, setLoading] = useState(false);
     const [error, setError] = useState(null);
 
-    const handleChange = (e) => {
-        const { name, value } = e.target;
-        // Importante: convertire a numero
-        setInputData(prev => ({ ...prev, [name]: Number(value) }));
+    // Gestione selezione luogo
+    const handlePlaceSelect = (place) => {
+        setLocation(place.formattedAddress);
+        const searchTerm = place.addrParts?.locality || place.addrParts?.admin2 || place.formattedAddress;
+        setGeoData({ ...place, searchCity: searchTerm });
     };
 
-    const handleRunPipeline = async () => {
+    const handleAnalyze = async () => {
+        if (!geoData?.searchCity) {
+            setError("Per favore seleziona una località valida dalla lista.");
+            return;
+        }
+
         setLoading(true);
         setError(null);
         setResult(null);
+        setWeatherData(null);
+
         try {
-            const res = await processPipeline(inputData, plantType);
-            setResult(res);
-            // Verifica errori specifici del backend, anche se status è 'success'
-            if (res.status === 'error' && res.metadata.errors.length > 0) {
-                setError(res.metadata.errors.join(', ') || 'Errore sconosciuto durante il processing.');
+            // 1. Recupera Dati Meteo Reali
+            const weatherRes = await api.get(`/api/weather?city=${encodeURIComponent(geoData.searchCity)}`);
+            const weather = weatherRes.data;
+            setWeatherData(weather);
+
+            // 2. Costruisci i dati "Sensore"
+            const sensorData = {
+                temperature: weather.temp,
+                humidity: weather.humidity,
+                rainfall: weather.rainNext24h || 0.0,
+                light: weather.light || 0.0,
+                soil_moisture: weather.soil_moisture || 0.0
+            };
+
+            // 3. Prepara il payload COMPLETO per la Pipeline (con il nuovo campo soil_type)
+            const payload = {
+                sensor_data: sensorData,
+                plant_type: plantType,
+                soil_type: soilType // 🟢 INVIAMO IL TIPO DI TERRENO AL BACKEND
+            };
+
+            // 4. Esegui la Pipeline 
+            // Dobbiamo passare il payload COMPLETO al backend.
+            // Assumo che la funzione processPipeline sia stata aggiornata 
+            // per accettare il payload completo (che è il formato Pydantic PipelineRequest).
+            const pipelineRes = await processPipeline(payload); 
+            
+            if (pipelineRes.status === 'error') {
+                throw new Error(pipelineRes.metadata.errors.join(', '));
             }
+
+            setResult(pipelineRes);
+
         } catch (err) {
-            console.error('Errore esecuzione pipeline:', err);
-            setError(err.response?.data?.detail || 'Errore di connessione o API');
+            console.error('Errore analisi:', err);
+            setError(err.response?.data?.detail || err.message || 'Errore durante l\'analisi');
         } finally {
             setLoading(false);
         }
     };
 
     const handleReset = () => {
-        setInputData(DEFAULT_INPUT);
-        setPlantType('tomato');
+        setLocation('');
+        setGeoData(null);
         setResult(null);
+        setWeatherData(null);
         setError(null);
+        setSoilType('franco');
+    };
+
+    // Calcola il "Verdetto" visivo basato sull'Indice di Comfort della pipeline
+    const getSuitabilityBadge = (res) => {
+        const comfort = res?.details?.features?.climate_comfort_index || 0;
+        const stress = res?.details?.features?.water_stress_index || 0;
+
+        if (comfort >= 75 && stress < 40) 
+            return { label: "LUOGO IDEALE", color: "text-green-700", bg: "bg-green-100", border: "border-green-500" };
+        if (comfort >= 50) 
+            return { label: "BUONO", color: "text-blue-700", bg: "bg-blue-100", border: "border-blue-500" };
+        if (comfort >= 30) 
+            return { label: "ACCETTABILE", color: "text-yellow-700", bg: "bg-yellow-100", border: "border-yellow-500" };
+        
+        return { label: "SCONSIGLIATO", color: "text-red-700", bg: "bg-red-100", border: "border-red-500" };
     };
 
     return (
@@ -67,123 +125,192 @@ export default function PipelineTestPage() {
             <div className="min-h-screen bg-green-50 pt-16">
                 <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
                     
-                    {/* Header */}
-                    <div className="mb-8">
-                        <div className="flex items-center space-x-3">
-                            <div className="bg-gradient-to-r from-green-600 to-teal-600 p-3 rounded-full">
-                                <Settings className="h-8 w-8 text-white" />
-                            </div>
-                            <div>
-                                <h1 className="text-3xl font-bold text-gray-900">
-                                    Pipeline Testing & Log Decisionale
-                                </h1>
-                                <p className="text-gray-600">
-                                    Invia dati sensore e visualizza in dettaglio ogni step della pipeline.
-                                </p>
-                            </div>
-                        </div>
-                    </div>
-
-                    <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
-                        {/* Colonna Input Raw */}
-                        <div className="lg:col-span-1 bg-white p-6 rounded-xl shadow-lg h-fit sticky top-24">
-                            <h2 className="text-xl font-bold text-gray-900 mb-4 flex items-center gap-2">
-                                <Droplets className="h-5 w-5 text-green-600" /> Input Dati Sensore
-                            </h2>
-
-                            <div className="space-y-4">
-                                {Object.keys(DEFAULT_INPUT).map((key) => (
-                                    <div key={key}>
-                                        <label className="block text-sm font-medium text-gray-700 mb-1 capitalize">
-                                            {key.replace('_', ' ')}
-                                        </label>
-                                        <input
-                                            type="number"
-                                            step="0.1"
-                                            name={key}
-                                            value={inputData[key]}
-                                            onChange={handleChange}
-                                            className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-green-500"
-                                            placeholder={`Valore per ${key.replace('_', ' ')}`}
-                                        />
-                                    </div>
-                                ))}
-                                
-                                {/* Selezione Tipo Pianta */}
-                                <div>
-                                    <label className="block text-sm font-medium text-gray-700 mb-1">
-                                        Tipo Pianta
-                                    </label>
-                                    <select
-                                        value={plantType}
-                                        onChange={(e) => setPlantType(e.target.value)}
-                                        className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-green-500"
-                                    >
-                                        {SUPPORTED_PLANTS.map(p => (
-                                            <option key={p} value={p}>{p.charAt(0).toUpperCase() + p.slice(1)}</option>
-                                        ))}
-                                    </select>
-                                    <p className="text-xs text-gray-500 mt-1">
-                                        La strategia di irrigazione dipende dal tipo di pianta.
-                                    </p>
-                                </div>
-
-                                <div className="flex gap-3 pt-2">
-                                    <button
-                                        onClick={handleRunPipeline}
-                                        disabled={loading}
-                                        className="flex-1 bg-green-600 text-white px-4 py-3 rounded-lg hover:bg-green-700 transition-colors font-medium flex items-center justify-center gap-2 disabled:opacity-50"
-                                    >
-                                        {loading ? (
-                                            <>
-                                                <RefreshCw className="h-5 w-5 animate-spin" /> Elaborazione...
-                                            </>
-                                        ) : (
-                                            <>
-                                                <Brain className="h-5 w-5" /> Esegui Pipeline
-                                            </>
-                                        )}
-                                    </button>
-                                    <button
-                                        onClick={handleReset}
-                                        className="px-4 py-3 border border-gray-300 text-gray-700 rounded-lg hover:bg-gray-50 transition-colors font-medium"
-                                        title="Reset"
-                                    >
-                                        Reset
-                                    </button>
-                                </div>
-                            </div>
-                        </div>
-
-                        {/* Colonna Risultati e Log */}
-                        <div className="lg:col-span-2 space-y-6">
-                            {error && (
-                                <div className="bg-red-50 border border-red-200 rounded-xl p-4 flex items-start gap-3">
-                                    <AlertTriangle className="h-5 w-5 text-red-600 mt-0.5" />
-                                    <div>
-                                        <p className="text-red-700 font-medium">Errore di Esecuzione:</p>
-                                        <p className="text-sm text-red-600 mt-1">{error}</p>
-                                    </div>
-                                </div>
-                            )}
-
-                            {result ? (
-                                <PipelineResultCard result={result} plantType={plantType} />
-                            ) : (
-                                <div className="bg-white p-10 rounded-xl shadow-lg text-center text-gray-500">
-                                    <Brain className="h-12 w-12 mx-auto mb-4" />
-                                    <p>Inserisci i dati nel modulo a lato e clicca 'Esegui Pipeline' per visualizzare i risultati e i log decisionali.</p>
-                                </div>
-                            )}
-                        </div>
-                    </div>
-                    
-                    <div className="mt-12 text-center text-sm text-gray-500">
-                        <p>
-                            Questo strumento di test è disponibile solo per utenti autenticati e non salva dati.
+                    {/* Intestazione */}
+                    <div className="mb-8 text-center md:text-left">
+                        <h1 className="text-3xl font-bold text-gray-900 flex items-center justify-center md:justify-start gap-3">
+                            <Sprout className="h-8 w-8 text-green-600" />
+                            Analisi Idoneità Ambientale
+                        </h1>
+                        <p className="text-gray-600 mt-2">
+                            Verifica se il clima attuale di una località è adatto alla coltivazione della tua pianta.
                         </p>
                     </div>
 
+                    <div className="grid grid-cols-1 lg:grid-cols-3 gap-8">
+                        
+                        {/* --- COLONNA SINISTRA: INPUT --- */}
+                        <div className="lg:col-span-1 space-y-6">
+                            <div className="bg-white p-6 rounded-xl shadow-lg border border-green-100 sticky top-24">
+                                <h2 className="text-lg font-bold text-gray-800 mb-4 flex items-center gap-2">
+                                    <MapPin className="h-5 w-5 text-blue-600" /> 
+                                    Configura Analisi
+                                </h2>
+
+                                <div className="space-y-5">
+                                    {/* Scelta Pianta */}
+                                    <div>
+                                        <label className="block text-sm font-medium text-gray-700 mb-1">
+                                            Pianta
+                                        </label>
+                                        <div className="relative">
+                                            <select
+                                                value={plantType}
+                                                onChange={(e) => setPlantType(e.target.value)}
+                                                className="w-full pl-4 pr-10 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-green-500 bg-white appearance-none"
+                                            >
+                                                {SUPPORTED_PLANTS.map(p => (
+                                                    <option key={p} value={p}>
+                                                        {p.charAt(0).toUpperCase() + p.slice(1)}
+                                                    </option>
+                                                ))}
+                                            </select>
+                                        </div>
+                                    </div>
+                                    
+                                    {/* 🟢 NUOVO: SELETTORE TIPO DI TERRENO */}
+                                    <div>
+                                        <label className="block text-sm font-medium text-gray-700 mb-1">
+                                            Tipo di Terreno
+                                        </label>
+                                        <div className="relative">
+                                            <select
+                                                value={soilType}
+                                                onChange={(e) => setSoilType(e.target.value)}
+                                                className="w-full pl-4 pr-10 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-green-500 bg-white appearance-none"
+                                            >
+                                                {SUPPORTED_SOILS.map(s => (
+                                                    <option key={s.id} value={s.id}>
+                                                        {s.label}
+                                                    </option>
+                                                ))}
+                                            </select>
+                                            <div className="absolute inset-y-0 right-0 flex items-center px-2 pointer-events-none">
+                                                <ArrowRight className="h-4 w-4 text-gray-400 rotate-90" />
+                                            </div>
+                                        </div>
+                                        <p className="text-xs text-gray-500 mt-1">Influenza la ritenzione idrica e la frequenza.</p>
+                                    </div>
+
+                                    {/* Scelta Luogo */}
+                                    <div>
+                                        <label className="block text-sm font-medium text-gray-700 mb-1">
+                                            Località
+                                        </label>
+                                        <PlaceAutocomplete 
+                                            value={location}
+                                            onChangeText={setLocation}
+                                            onSelectPlace={handlePlaceSelect}
+                                            placeholder="Es. Roma, Giardino Botanico..."
+                                            className="w-full px-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-green-500"
+                                        />
+                                    </div>
+
+                                    {/* Azioni */}
+                                    <div className="pt-2 flex gap-3">
+                                        <button
+                                            onClick={handleAnalyze}
+                                            disabled={loading || !geoData}
+                                            className="flex-1 bg-green-600 text-white px-4 py-3 rounded-lg hover:bg-green-700 transition-colors font-bold shadow-md disabled:opacity-50 disabled:cursor-not-allowed flex items-center justify-center gap-2"
+                                        >
+                                            {loading ? "Analisi..." : <><Search className="h-5 w-5" /> Verifica</>}
+                                        </button>
+                                        {result && (
+                                            <button
+                                                onClick={handleReset}
+                                                className="px-4 py-3 border border-gray-200 text-gray-600 rounded-lg hover:bg-gray-50"
+                                                title="Resetta"
+                                            >
+                                                Reset
+                                            </button>
+                                        )}
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+
+                        {/* --- COLONNA DESTRA: RISULTATI --- */}
+                        <div className="lg:col-span-2 space-y-6">
+                            
+                            {error && (
+                                <div className="bg-red-50 border-l-4 border-red-500 p-4 rounded-r-lg flex items-start gap-3">
+                                    <AlertTriangle className="h-6 w-6 text-red-600 mt-0.5" />
+                                    <div>
+                                        <h3 className="font-bold text-red-800">Impossibile completare l'analisi</h3>
+                                        <p className="text-red-700 text-sm">{error}</p>
+                                    </div>
+                                </div>
+                            )}
+
+                            {!result && !loading && !error && (
+                                <div className="bg-white h-full min-h-[300px] rounded-xl shadow-sm border border-gray-200 border-dashed flex flex-col items-center justify-center text-gray-400 p-8 text-center">
+                                    <Brain className="h-16 w-16 mb-4 text-gray-300" />
+                                    <h3 className="text-lg font-semibold text-gray-600">Pronto per l'analisi</h3>
+                                    <p className="max-w-sm mt-2 text-sm">
+                                        Il sistema incrocerà i dati meteo satellitari con le esigenze biologiche della pianta selezionata.
+                                    </p>
+                                </div>
+                            )}
+
+                            {result && (
+                                <div className="space-y-6 animate-in fade-in duration-500">
+                                    
+                                    {/* 1. CARD PRINCIPALE: VERDETTO */}
+                                    <div className="bg-white rounded-xl shadow-lg overflow-hidden">
+                                        <div className="bg-gray-50 p-6 border-b border-gray-100 flex flex-col md:flex-row justify-between items-start md:items-center gap-4">
+                                            <div>
+                                                <h2 className="text-xl font-bold text-gray-900">
+                                                    Risultato per <span className="text-green-700 uppercase">{plantType}</span>
+                                                </h2>
+                                                <p className="text-sm text-gray-500 flex items-center gap-1">
+                                                    <MapPin className="h-3 w-3" /> {geoData?.searchCity}
+                                                </p>
+                                            </div>
+                                            
+                                            {(() => {
+                                                const badge = getSuitabilityBadge(result);
+                                                return (
+                                                    <div className={`px-5 py-2 rounded-lg border-2 ${badge.border} ${badge.bg} ${badge.color} text-center shadow-sm`}>
+                                                        <p className="text-[10px] font-bold tracking-widest uppercase opacity-80">Rating Idoneità</p>
+                                                        <p className="text-lg font-black">{badge.label}</p>
+                                                    </div>
+                                                );
+                                            })()}
+                                        </div>
+
+                                        {/* Dati Ambientali Rilevati */}
+                                        <div className="p-6 grid grid-cols-2 md:grid-cols-4 gap-4">
+                                            <div className="text-center p-3 bg-orange-50 rounded-lg">
+                                                <Thermometer className="h-6 w-6 text-orange-500 mx-auto mb-1" />
+                                                <p className="text-xs text-gray-500">Temperatura</p>
+                                                <p className="font-bold text-gray-900">{weatherData.temp}°C</p>
+                                            </div>
+                                            <div className="text-center p-3 bg-blue-50 rounded-lg">
+                                                <Droplets className="h-6 w-6 text-blue-500 mx-auto mb-1" />
+                                                <p className="text-xs text-gray-500">Umidità Aria</p>
+                                                <p className="font-bold text-gray-900">{weatherData.humidity}%</p>
+                                            </div>
+                                            <div className="text-center p-3 bg-indigo-50 rounded-lg">
+                                                <CloudRain className="h-6 w-6 text-indigo-500 mx-auto mb-1" />
+                                                <p className="text-xs text-gray-500">Pioggia</p>
+                                                <p className="font-bold text-gray-900">{weatherData.rainNext24h} mm</p>
+                                            </div>
+                                            <div className="text-center p-3 bg-yellow-50 rounded-lg">
+                                                <Sun className="h-6 w-6 text-yellow-500 mx-auto mb-1" />
+                                                <p className="text-xs text-gray-500">Luce</p>
+                                                <p className="font-bold text-gray-900">{(weatherData.light / 1000).toFixed(1)}k lx</p>
+                                            </div>
+                                        </div>
+                                    </div>
+
+                                    {/* 2. CARD CONSIGLI & DETTAGLI (Riutilizzo PipelineResultCard) */}
+                                    <div className="opacity-100">
+                                        <PipelineResultCard result={result} plantType={plantType} />
+                                    </div>
+
+                                </div>
+                            )}
+                        </div>
+                    </div>
                 </div>
             </div>
         </RequireAuth>

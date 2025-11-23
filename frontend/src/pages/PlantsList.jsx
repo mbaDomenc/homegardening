@@ -3,6 +3,7 @@ import { Plus, Search, Leaf } from 'lucide-react';
 import { api } from '../api/axiosInstance';
 import PlantCard from '../components/PlantCard';
 import PlantFormModal from '../components/PlantFormModal';
+import { uploadPlantImage } from '../api/uploads';
 
 //  Normalizzazione:  gestisce id string, _id string, _id.$oid, e normalizza date
 const normalize = (arr = []) =>
@@ -70,14 +71,33 @@ const PlantsList = ({ onOpenDetail = () => {} }) => {
   };
 
   // Submit form (create/update) —> ricarico sempre la lista dal server
-  const handleFormSubmit = async (formData) => {
+  
+  const handleFormSubmit = async (formData, imageFile) => { // Accetta imageFile come secondo argomento
     try {
+      let plantId = null;
+
       if (editingPlant) {
-        await api.patch(`/api/piante/${editingPlant.id}`, formData);
+        // Modifica
+        plantId = editingPlant.id;
+        await api.patch(`/api/piante/${plantId}`, formData);
       } else {
-        await api.post('/api/piante', formData);
+        // Creazione
+        const { data } = await api.post('/api/piante', formData);
+        plantId = data.id || data._id; // Assicurati di prendere l'ID corretto dalla risposta
       }
-      await loadPlants();            // 🔥 ricarico lista dal server
+
+      // Se c'è un file immagine, caricalo ora usando l'ID della pianta
+      if (imageFile && plantId) {
+        console.log("Caricamento immagine per pianta:", plantId);
+        try {
+            await uploadPlantImage(plantId, imageFile);
+        } catch (imgErr) {
+            console.error("Errore caricamento immagine:", imgErr);
+            alert("Pianta salvata, ma errore nel caricamento dell'immagine.");
+        }
+      }
+
+      await loadPlants(); // Ricarica la lista
       setModalOpen(false);
       setEditingPlant(null);
     } catch (error) {
