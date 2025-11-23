@@ -94,6 +94,9 @@ class ImageResponse(ImageBase):
 
     class Config:
         populate_by_name = True
+        from_attributes = True
+        json_schema_extra = {}
+
 
 
 class ImageUpdateProcessed(BaseModel):

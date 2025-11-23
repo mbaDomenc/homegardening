@@ -9,7 +9,8 @@ class PlantBase(BaseModel):
     locationCountry: Optional[str] = None
     locationCountryCode: Optional[str] = None
     description: Optional[str] = None
-
+    soil: Optional[str] = Field(None, description="Tipologia di terreno (es. Argilloso, Sabbioso, Lavorabile)") 
+    
     # derivati
     wateringIntervalDays: Optional[int] = 3
     sunlight: Optional[str] = "pieno sole"
