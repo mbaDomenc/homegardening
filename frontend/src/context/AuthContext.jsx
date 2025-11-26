@@ -7,7 +7,7 @@ const AuthContext = createContext(null);
 export const AuthProvider = ({ children }) => {
   const [accessToken, setAccessToken] = useState(null); // token SOLO in memoria (no localStorage)
   const [user, setUser] = useState(null);               // {id, username, email, ruolo, ...}
-  const [loading, setLoading] = useState(false);
+  const [loading, setLoading] = useState(true);
   const navigate = useNavigate() ;
 
   // Collego axios al getter/setter del token
