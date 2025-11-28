@@ -41,7 +41,7 @@ app.mount("/uploads", StaticFiles(directory=str(uploads_dir)), name="uploads")
 
 # ---- Registrazione Router ----
 app.include_router(userRouter.router, prefix="/api/utenti", tags=["utenti"])
-app.include_router(plantsRouter.router) # Già prefixati internamente
+app.include_router(plantsRouter.router) 
 app.include_router(interventionsRouter.router)
 app.include_router(trefleRouter.router)
 app.include_router(weatherRouter.router)

@@ -15,8 +15,8 @@ from database import db
 from utils.images import save_image_bytes
 
 
-# Collection MongoDB - USA LO STESSO NOME DEL ROUTER!
-images_collection = db["immagini_piante"]  # ✅ CORRETTO - uguale al router
+# Collection MongoDB 
+images_collection = db["immagini_piante"] 
 
 
 def extract_metadata_from_path(filepath: Path) -> dict:
@@ -32,13 +32,13 @@ def extract_metadata_from_path(filepath: Path) -> dict:
         "notes": None
     }
     
-    # Esempio: se la struttura è /dataset/{plant_type}/{filename}
-    if len(parts) >= 2:
-        metadata["plant_type"] = parts[-2]  # Cartella padre = tipo pianta
     
-    # Esempio: se la struttura è /dataset/{plant_type}/{location}/{filename}
+    if len(parts) >= 2:
+        metadata["plant_type"] = parts[-2]  
+    
+    
     if len(parts) >= 3:
-        metadata["location"] = parts[-2]  # Cartella padre = location
+        metadata["location"] = parts[-2]  
         metadata["plant_type"] = parts[-3]
     
     return metadata
@@ -52,7 +52,7 @@ def import_image(image_path: Path) -> dict:
     3. Salva con save_image_bytes (crea full + thumbnail)
     4. Salva documento su MongoDB
     """
-    print(f"📸 Processando: {image_path.name}")
+    print(f"Processando: {image_path.name}")
     
     # STEP 1: Leggi file
     try:
@@ -60,29 +60,29 @@ def import_image(image_path: Path) -> dict:
             image_data = f.read()
         print(f"   ✓ File letto: {len(image_data)} bytes")
     except Exception as e:
-        print(f"   ❌ Errore lettura file {image_path}: {e}")
+        print(f"Errore lettura file {image_path}: {e}")
         return None
     
     # STEP 2: Estrai metadati dal path/nome
     path_metadata = extract_metadata_from_path(image_path)
     print(f"   ✓ Path metadata: plant_type={path_metadata['plant_type']}, location={path_metadata['location']}")
     
-    # STEP 3: Estrai metadati immagine - SENZA UNDERSCORE!
+    # STEP 3: Estrai metadati immagine
     try:
         img = Image.open(BytesIO(image_data))
         image_metadata = {
-            "filesizebytes": len(image_data),  # ✅ CORRETTO - senza underscore
-            "filesizemb": round(len(image_data) / (1024 * 1024), 2),  # ✅ CORRETTO
-            "imagewidth": img.width,  # ✅ CORRETTO
-            "imageheight": img.height,  # ✅ CORRETTO
+            "filesizebytes": len(image_data),  
+            "filesizemb": round(len(image_data) / (1024 * 1024), 2),  
+            "imagewidth": img.width,  
+            "imageheight": img.height,  
             "format": img.format or "UNKNOWN",
             "mode": img.mode,
-            "originalfilename": image_path.name  # ✅ CORRETTO
+            "originalfilename": image_path.name  
         }
         img.close()
         print(f"   ✓ Immagine: {img.width}x{img.height}, formato: {image_metadata['format']}")
     except Exception as e:
-        print(f"   ⚠️  Impossibile estrarre metadati immagine: {e}")
+        print(f"Impossibile estrarre metadati immagine: {e}")
         image_metadata = {
             "filesizebytes": len(image_data),
             "filesizemb": round(len(image_data) / (1024 * 1024), 2),
@@ -94,7 +94,7 @@ def import_image(image_path: Path) -> dict:
             "error": str(e)
         }
     
-    # STEP 4: Salva immagine (full + thumbnail) - PARAMETRI SENZA UNDERSCORE!
+    # STEP 4: Salva immagine (full + thumbnail)
     date_subdir = datetime.utcnow().strftime("%Y%m%d")
     subdir = f"plant_images/{date_subdir}"
     
@@ -102,38 +102,38 @@ def import_image(image_path: Path) -> dict:
         saved_paths = save_image_bytes(
             data=image_data,
             subdir=subdir,
-            base_name=None,      # ✅ CORRETTO - senza underscore
-            max_side=1280,       # ✅ CORRETTO - senza underscore
-            thumb_side=384,      # ✅ CORRETTO - senza underscore
-            webp_quality=82      # ✅ CORRETTO - senza underscore
+            base_name=None,      
+            max_side=1280,       
+            thumb_side=384,      
+            webp_quality=82      
         )
         print(f"   ✓ Salvata: {saved_paths['url']}")
     except Exception as e:
-        print(f"   ❌ Errore salvataggio: {e}")
+        print(f"Errore salvataggio: {e}")
         import traceback
-        traceback.print_exc()  # Stampa stack trace completo per debug
+        traceback.print_exc() 
         return None
     
-    # STEP 5: Crea documento MongoDB - NOMI SENZA UNDERSCORE!
+    # STEP 5: Crea documento MongoDB 
     image_doc = {
         "filename": os.path.basename(saved_paths["abs"]),
-        "originalfilename": image_path.name,  # ✅ CORRETTO - senza underscore
-        "filepathfull": saved_paths["abs"],  # ✅ CORRETTO - senza underscore
-        "filepaththumb": saved_paths["absThumb"],  # ✅ CORRETTO - senza underscore
-        "urlfull": saved_paths["url"],  # ✅ CORRETTO - senza underscore
-        "urlthumb": saved_paths["thumbUrl"],  # ✅ CORRETTO - senza underscore
-        "relpathfull": saved_paths["rel"],  # ✅ CORRETTO - senza underscore
-        "relpaththumb": saved_paths["relThumb"],  # ✅ CORRETTO - senza underscore
-        "planttype": path_metadata["plant_type"],  # ✅ CORRETTO - senza underscore
+        "originalfilename": image_path.name,  
+        "filepathfull": saved_paths["abs"],  
+        "filepaththumb": saved_paths["absThumb"],  
+        "urlfull": saved_paths["url"],  
+        "urlthumb": saved_paths["thumbUrl"],  
+        "relpathfull": saved_paths["rel"],  
+        "relpaththumb": saved_paths["relThumb"],  
+        "planttype": path_metadata["plant_type"],  
         "location": path_metadata["location"],
-        "sensorid": None,  # ✅ CORRETTO - senza underscore
-        "uploadtimestamp": datetime.utcnow(),  # ✅ CORRETTO - senza underscore
+        "sensorid": None,  
+        "uploadtimestamp": datetime.utcnow(),  
         "processed": False,
-        "cnnresults": None,  # ✅ CORRETTO - senza underscore
+        "cnnresults": None,  
         "notes": path_metadata["notes"],
         "tags": [],
         "metadata": image_metadata,
-        "importsource": str(image_path)  # ✅ CORRETTO - senza underscore (traccia origine)
+        "importsource": str(image_path)  
     }
     
     # STEP 6: Salva su MongoDB
@@ -143,7 +143,7 @@ def import_image(image_path: Path) -> dict:
         print(f"   ✓ MongoDB ID: {image_id}")
         return image_doc
     except Exception as e:
-        print(f"   ❌ Errore MongoDB: {e}")
+        print(f" Errore MongoDB: {e}")
         import traceback
         traceback.print_exc()
         # Rollback: elimina file fisici
@@ -171,18 +171,18 @@ def import_images_from_directory(source_dir: str, extensions: list = None):
     
     # Verifica esistenza cartella
     if not source_path.exists():
-        print(f"\n❌ ERRORE: Cartella non trovata!")
+        print(f"\n ERRORE: Cartella non trovata!")
         print(f"   Path: {source_dir}")
-        print(f"\n💡 Verifica che il percorso sia corretto")
+        print(f"\n Verifica che il percorso sia corretto")
         return
     
     if not source_path.is_dir():
-        print(f"\n❌ ERRORE: Il path non è una directory!")
+        print(f"\n ERRORE: Il path non è una directory!")
         print(f"   Path: {source_dir}")
         return
     
     # Trova tutte le immagini
-    print(f"\n🔍 Ricerca immagini in corso...")
+    print(f"\n Ricerca immagini in corso...")
     image_files = []
     for ext in extensions:
         found = list(source_path.rglob(f"*{ext}"))
@@ -191,23 +191,23 @@ def import_images_from_directory(source_dir: str, extensions: list = None):
         image_files.extend(found)
     
     print(f"\n{'='*60}")
-    print(f"📁 Cartella sorgente: {source_dir}")
-    print(f"🖼️  Immagini trovate: {len(image_files)}")
+    print(f" Cartella sorgente: {source_dir}")
+    print(f"  Immagini trovate: {len(image_files)}")
     print(f"{'='*60}\n")
     
     if len(image_files) == 0:
-        print("❌ Nessuna immagine trovata!")
-        print("\n💡 Verifica che:")
+        print(" Nessuna immagine trovata!")
+        print("\n Verifica che:")
         print("   1. Il percorso contenga immagini")
         print("   2. Le immagini abbiano estensioni: .jpg, .jpeg, .png, .webp")
         return
     
     # Chiedi conferma per grandi importazioni
     if len(image_files) > 100:
-        print(f"⚠️  Stai per importare {len(image_files)} immagini!")
+        print(f"  Stai per importare {len(image_files)} immagini!")
         confirm = input("Vuoi procedere? (s/n): ").strip().lower()
         if confirm not in ['s', 'si', 'y', 'yes']:
-            print("❌ Importazione annullata")
+            print(" Importazione annullata")
             return
     
     # Importa ogni immagine
@@ -226,13 +226,13 @@ def import_images_from_directory(source_dir: str, extensions: list = None):
     
     # Riepilogo finale
     print(f"\n{'='*60}")
-    print(f"{'✅ IMPORTAZIONE COMPLETATA' if error_count == 0 else '⚠️  IMPORTAZIONE COMPLETATA CON ERRORI'}")
+    print(f"{'IMPORTAZIONE COMPLETATA' if error_count == 0 else 'IMPORTAZIONE COMPLETATA CON ERRORI'}")
     print(f"{'='*60}")
     print(f"   ✓ Successi: {success_count}")
     print(f"   ✗ Errori: {error_count}")
-    print(f"   📊 Totale: {len(image_files)}")
+    print(f"Totale: {len(image_files)}")
     if len(image_files) > 0:
-        print(f"   📈 Success rate: {round(success_count/len(image_files)*100, 1)}%")
+        print(f"Success rate: {round(success_count/len(image_files)*100, 1)}%")
     print(f"{'='*60}\n")
 
 
@@ -241,15 +241,15 @@ def clear_database():
     ATTENZIONE: Elimina tutti i record di immagini da MongoDB
     Usare solo per test!
     """
-    print("\n⚠️  ATTENZIONE: Stai per eliminare TUTTE le immagini dal database!")
+    print("\n ATTENZIONE: Stai per eliminare TUTTE le immagini dal database!")
     print(f"   Collection: {images_collection.name}")
     confirm = input("\nDigita 'CONFIRM' per procedere: ")
     
     if confirm == "CONFIRM":
         result = images_collection.delete_many({})
-        print(f"✅ Eliminati {result.deleted_count} documenti")
+        print(f"Eliminati {result.deleted_count} documenti")
     else:
-        print("❌ Operazione annullata")
+        print("Operazione annullata")
 
 
 if __name__ == "__main__":
@@ -259,7 +259,7 @@ if __name__ == "__main__":
 ╚═══════════════════════════════════════════════════════════╝
     """)
     
-    # PERCORSO HARDCODED - Modifica con il tuo path!
+    #DEFAULT PATH
     DEFAULT_PATH = "/Users/maure/Desktop/PROGETTO MONGIELLO /PlantVillage"
     
     print("Opzioni:")
@@ -273,17 +273,17 @@ if __name__ == "__main__":
     if choice == "1":
         # Verifica che il path esista
         if not Path(DEFAULT_PATH).exists():
-            print(f"\n❌ ERRORE: Il path non esiste!")
+            print(f"\n ERRORE: Il path non esiste!")
             print(f"   Path: {DEFAULT_PATH}")
-            print(f"\n💡 Suggerimento: Usa l'opzione 2 per inserire il path corretto")
+            print(f"\n Suggerimento: Usa l'opzione 2 per inserire il path corretto")
         else:
             import_images_from_directory(DEFAULT_PATH)
     
     elif choice == "2":
-        source_dir = input("\n📁 Inserisci il percorso della cartella: ").strip()
+        source_dir = input("\n Inserisci il percorso della cartella: ").strip()
         
         if not source_dir:
-            print("❌ Percorso non valido!")
+            print("Percorso non valido!")
         else:
             import_images_from_directory(source_dir)
     
@@ -291,7 +291,7 @@ if __name__ == "__main__":
         clear_database()
     
     elif choice == "4":
-        print("👋 Uscita...")
+        print("Uscita...")
     
     else:
-        print("❌ Opzione non valida!")
+        print("Opzione non valida!")
