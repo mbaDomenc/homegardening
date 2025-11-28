@@ -34,7 +34,6 @@ class FeatureEngineer(ProcessorBase):
         features["soil_behavior"] = soil_props["description"]
         
         # Calcola Acqua Disponibile (AWC - Available Water Content) attuale
-        # Quanto siamo lontani dal punto di morte e quanto siamo vicini alla saturazione?
         current_moisture = data.get("soil_moisture", 50)
         features["awc_percentage"] = self._calculate_awc(current_moisture, soil_props)
 
@@ -81,7 +80,7 @@ class FeatureEngineer(ProcessorBase):
         context.features = features
         return {"features": features}
 
-    # --- CALCOLI SCIENTIFICI ---
+    # --- CALCOLI SULLA BASE SCIENTIFICA ---
 
     def _calculate_vpd(self, T, RH):
         """Calcola il Vapor Pressure Deficit in kPa."""
@@ -98,7 +97,7 @@ class FeatureEngineer(ProcessorBase):
         if RH > 80: risk += 40
         elif RH > 70: risk += 20
         
-        if 15 <= T <= 28: risk += 30 # Temp ottimali per funghi
+        if 15 <= T <= 28: risk += 30 # Temperatura ottimali per funghi
         
         if vpd < 0.4: risk += 30 # Aria stagnante
         

@@ -39,7 +39,7 @@ class PipelineManager:
                       .set_next(self.anomaly_detector) \
                       .set_next(self.action_generator)
         
-        print(f"✅ Pipeline inizializzata per pianta: {plant_type or 'generic'}")
+        print(f"Pipeline inizializzata per pianta: {plant_type or 'generic'}")
         
     def process(self, sensor_data: Dict[str, Any]) -> Dict[str, Any]:
         """
@@ -52,7 +52,7 @@ class PipelineManager:
             Risultato completo della pipeline con suggerimenti
         """
         print(f"\n{'='*60}")
-        print("🚀 Avvio Pipeline di Processing")
+        print("Avvio Pipeline di Processing")
         print(f"{'='*60}")
         
         # Crea contesto
@@ -64,12 +64,12 @@ class PipelineManager:
             context.complete()
             
             print(f"\n{'='*60}")
-            print("✅ Pipeline Completata")
+            print("Pipeline Completata")
             print(f"{'='*60}\n")
             
         except Exception as e:
             print(f"\n{'='*60}")
-            print(f"❌ Pipeline Fallita: {str(e)}")
+            print(f"Pipeline Fallita: {str(e)}")
             print(f"{'='*60}\n")
             context.add_error("Pipeline", str(e))
             context.complete()

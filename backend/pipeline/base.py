@@ -106,7 +106,7 @@ class ProcessorBase(ABC):
         Template Method Pattern.
         """
         try:
-            print(f"🔄 [{self.name}] Processando...")
+            print(f" [{self.name}] Processando...")
             
             # Esegui la logica specifica del processore
             result = self._execute(context)
@@ -119,10 +119,10 @@ class ProcessorBase(ABC):
                 result
             )
             
-            print(f"✅ [{self.name}] Completato")
+            print(f" [{self.name}] Completato")
             
         except Exception as e:
-            print(f"❌ [{self.name}] Errore: {str(e)}")
+            print(f" [{self.name}] Errore: {str(e)}")
             context.add_error(self.name, str(e))
             context.set_stage_result(
                 self._get_stage(),

@@ -139,13 +139,13 @@ class ActionGenerator(ProcessorBase):
         l = estimation["water_amount_ml"] / 1000
         d = estimation["decision"]
         
-        if not estimation["should_water"]: return "Livello ottimale. Non irrigare."
-        
-        # 🟢 MESSAGGIO INTEGRAZIONE
-        if d == "water_integration":
-            return f"Integrazione necessaria: mancano circa {l:.1f} litri per il target ottimale."
+        if d == "do_not_water":
+            return "Quantità ottimale raggiunta per questo ciclo. Non irrigare."
             
-        return f"Consigliata irrigazione di circa {l:.1f} litri."
+        if d == "water_integration":
+            return f"Integrazione necessaria: mancano ancora {l:.1f} litri per completare il ciclo."
+            
+        return f"Consigliata irrigazione di {l:.1f} litri per coprire il fabbisogno del ciclo."
 
     def _generate_secondary_actions(self, context: PipelineContext) -> List[Dict[str, Any]]:
         actions = []

@@ -4,72 +4,77 @@ from enum import Enum
 from .base import ProcessorBase, PipelineContext, PipelineStage
 
 class PlantType(str, Enum):
-    TOMATO = "tomato"
-    POTATO = "potato"
-    PEACH = "peach"
-    GRAPE = "grape"
-    PEPPER = "pepper"
-    GENERIC = "generic"
+    TOMATO = "tomato"; POTATO = "potato"; PEACH = "peach"; GRAPE = "grape"; PEPPER = "pepper"; GENERIC = "generic"
 
 class IrrigationDecision(str, Enum):
     DO_NOT_WATER = "do_not_water"
-    WATER_INTEGRATION = "water_integration" # 🟢 STATO NUOVO
-    WATER_STANDARD = "water_standard" # 🟢 STATO NUOVO
+    WATER_INTEGRATION = "water_integration"
+    WATER_STANDARD = "water_standard"
     WATER_HEAVY = "water_heavy"
-    WATER_LIGHT = "water_light" # Mantenuto per compatibilità
-    WATER_MODERATE = "water_moderate" # Mantenuto per compatibilità
+    WATER_LIGHT = "water_light" 
+    WATER_MODERATE = "water_moderate" 
 
 class IrrigationStrategy(ABC):
     @abstractmethod
-    def estimate(self, cleaned_data: Dict[str, Any], features: Dict[str, Any]) -> Dict[str, Any]:
-        pass
+    def estimate(self, cleaned_data: Dict[str, Any], features: Dict[str, Any]) -> Dict[str, Any]: pass
     
-    def _calculate_gap(self, current, target, swrf, ml_per_pct):
-        gap = target - current
-        if gap <= 0: return 0, IrrigationDecision.DO_NOT_WATER
+    # LOGICA PURA: FABBISOGNO CICLO - VERSATO CICLO
+    def _calculate_budget(self, cycle_need_liters, added_cycle_liters):
+        missing = cycle_need_liters - added_cycle_liters
         
-        amount = gap * ml_per_pct * swrf
+        if missing <= 0.2: # Tolleranza 200ml
+            return 0.0, IrrigationDecision.DO_NOT_WATER
         
-        if gap < 15: decision = IrrigationDecision.WATER_INTEGRATION
-        elif gap < 30: decision = IrrigationDecision.WATER_STANDARD
-        else: decision = IrrigationDecision.WATER_HEAVY
+        # Se manca acqua, decide quanto
+        if missing < 1.0: decision = IrrigationDecision.WATER_INTEGRATION
+        else: decision = IrrigationDecision.WATER_STANDARD
             
-        return round(amount, 0), decision
+        return round(missing, 1), decision
 
+
+#STRATEGIE PER LE DIVERSE PIANTE PRESENTI
 class TomatoStrategy(IrrigationStrategy):
     def estimate(self, cleaned_data: Dict[str, Any], features: Dict[str, Any]) -> Dict[str, Any]:
-        # Target Pomodoro: 80%
-        amt, dec = self._calculate_gap(cleaned_data.get("soil_moisture", 50), 80.0, features.get("soil_retention_factor", 1.0), 50.0)
-        return {"should_water": dec != IrrigationDecision.DO_NOT_WATER, "decision": dec.value, "water_amount_ml": amt, "confidence": 0.9, "reasoning": f"Gap idrico calcolato su target 80%.", "plant_type": "tomato"}
+        added = cleaned_data.get("water_added_24h", 0.0) 
+        # Target per ciclo (es. 4 Litri ogni 3 giorni)
+        TARGET = 4.0 
+        amt, dec = self._calculate_budget(TARGET, added)
+        return {"should_water": dec != IrrigationDecision.DO_NOT_WATER, "decision": dec.value, "water_amount_ml": amt * 1000, "confidence": 0.95, "reasoning": f"Target Ciclo: {TARGET}L. Versati: {added}L.", "plant_type": "tomato"}
 
 class PotatoStrategy(IrrigationStrategy):
     def estimate(self, cleaned_data: Dict[str, Any], features: Dict[str, Any]) -> Dict[str, Any]:
-        # Target Patata: 75%
-        amt, dec = self._calculate_gap(cleaned_data.get("soil_moisture", 50), 75.0, features.get("soil_retention_factor", 1.0), 45.0)
-        return {"should_water": dec != IrrigationDecision.DO_NOT_WATER, "decision": dec.value, "water_amount_ml": amt, "confidence": 0.85, "reasoning": f"Gap idrico su target 75%.", "plant_type": "potato"}
+        added = cleaned_data.get("water_added_24h", 0.0)
+        TARGET = 3.5
+        amt, dec = self._calculate_budget(TARGET, added)
+        return {"should_water": dec != IrrigationDecision.DO_NOT_WATER, "decision": dec.value, "water_amount_ml": amt * 1000, "confidence": 0.9, "reasoning": f"Target Ciclo: {TARGET}L. Versati: {added}L.", "plant_type": "potato"}
 
 class PepperStrategy(IrrigationStrategy):
     def estimate(self, cleaned_data: Dict[str, Any], features: Dict[str, Any]) -> Dict[str, Any]:
-        # Target Peperone: 75%
-        amt, dec = self._calculate_gap(cleaned_data.get("soil_moisture", 50), 75.0, features.get("soil_retention_factor", 1.0), 40.0)
-        return {"should_water": dec != IrrigationDecision.DO_NOT_WATER, "decision": dec.value, "water_amount_ml": amt, "confidence": 0.85, "reasoning": f"Gap idrico su target 75%.", "plant_type": "pepper"}
+        added = cleaned_data.get("water_added_24h", 0.0)
+        TARGET = 3.0
+        amt, dec = self._calculate_budget(TARGET, added)
+        return {"should_water": dec != IrrigationDecision.DO_NOT_WATER, "decision": dec.value, "water_amount_ml": amt * 1000, "confidence": 0.85, "reasoning": f"Target Ciclo: {TARGET}L. Versati: {added}L.", "plant_type": "pepper"}
 
 class PeachStrategy(IrrigationStrategy):
     def estimate(self, cleaned_data: Dict[str, Any], features: Dict[str, Any]) -> Dict[str, Any]:
-        # Target Pesco: 60% (ma alto volume)
-        amt, dec = self._calculate_gap(cleaned_data.get("soil_moisture", 50), 60.0, features.get("soil_retention_factor", 1.0), 150.0)
-        return {"should_water": dec != IrrigationDecision.DO_NOT_WATER, "decision": dec.value, "water_amount_ml": amt, "confidence": 0.85, "reasoning": f"Gap idrico albero.", "plant_type": "peach"}
+        added = cleaned_data.get("water_added_24h", 0.0)
+        TARGET = 10.0 
+        amt, dec = self._calculate_budget(TARGET, added)
+        return {"should_water": dec != IrrigationDecision.DO_NOT_WATER, "decision": dec.value, "water_amount_ml": amt * 1000, "confidence": 0.85, "reasoning": f"Target Ciclo: {TARGET}L.", "plant_type": "peach"}
 
 class GrapeStrategy(IrrigationStrategy):
     def estimate(self, cleaned_data: Dict[str, Any], features: Dict[str, Any]) -> Dict[str, Any]:
-        # Target Vite: 45%
-        amt, dec = self._calculate_gap(cleaned_data.get("soil_moisture", 50), 45.0, features.get("soil_retention_factor", 1.0), 80.0)
-        return {"should_water": dec != IrrigationDecision.DO_NOT_WATER, "decision": dec.value, "water_amount_ml": amt, "confidence": 0.9, "reasoning": f"Gap idrico vite.", "plant_type": "grape"}
+        added = cleaned_data.get("water_added_24h", 0.0)
+        TARGET = 5.0
+        amt, dec = self._calculate_budget(TARGET, added)
+        return {"should_water": dec != IrrigationDecision.DO_NOT_WATER, "decision": dec.value, "water_amount_ml": amt * 1000, "confidence": 0.9, "reasoning": f"Target Ciclo: {TARGET}L.", "plant_type": "grape"}
 
 class GenericStrategy(IrrigationStrategy):
     def estimate(self, cleaned_data: Dict[str, Any], features: Dict[str, Any]) -> Dict[str, Any]:
-        amt, dec = self._calculate_gap(cleaned_data.get("soil_moisture", 50), 65.0, features.get("soil_retention_factor", 1.0), 35.0)
-        return {"should_water": dec != IrrigationDecision.DO_NOT_WATER, "decision": dec.value, "water_amount_ml": amt, "confidence": 0.5, "reasoning": "Gap generico.", "plant_type": "generic"}
+        added = cleaned_data.get("water_added_24h", 0.0)
+        TARGET = 2.5
+        amt, dec = self._calculate_budget(TARGET, added)
+        return {"should_water": dec != IrrigationDecision.DO_NOT_WATER, "decision": dec.value, "water_amount_ml": amt * 1000, "confidence": 0.5, "reasoning": f"Target Ciclo: {TARGET}L.", "plant_type": "generic"}
 
 class IrrigationEstimator(ProcessorBase):
     def __init__(self, plant_type: Optional[str] = None):
