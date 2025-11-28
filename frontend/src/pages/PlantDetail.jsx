@@ -72,7 +72,7 @@ const PlantDetail = ({ plantId, onBack, onDeleted }) => {
     }
   };
 
-  // Normalizza un intervento (accetta camelCase/snake_case e fallback "date")
+  // Normalizza un intervento
   const normalizeIntervention = (raw) => ({
     id: raw?.id ?? raw?._id ?? null,
     type: raw?.type ?? null,
@@ -110,7 +110,7 @@ const PlantDetail = ({ plantId, onBack, onDeleted }) => {
   const formatDateTime = (dateString) => {
   if (!dateString) return '—';
   const date = new Date(dateString);
-  const offset = new Date(date.getTime() + 2 * 60 * 60 * 1000); // Aggiunge 2 ore manualmente
+  const offset = new Date(date.getTime() + 2 * 60 * 60 * 1000);
   return offset.toLocaleString('it-IT', {
     year: 'numeric',
     month: 'long',
@@ -208,7 +208,7 @@ const PlantDetail = ({ plantId, onBack, onDeleted }) => {
   const fetchInterventions = async () => {
     try {
       const { data } = await api.get(`/api/piante/${plantId}/interventi`, {
-        params: { limit: 3 }, // 👈 richiede già max 3
+        params: { limit: 3 }, 
       });
 
       // Normalizza e ordina (executedAt -> plannedAt -> createdAt)
@@ -406,14 +406,6 @@ const PlantDetail = ({ plantId, onBack, onDeleted }) => {
                   <h1 className="text-2xl font-bold text-gray-900 truncate">
                     {plant.name || 'Senza nome'}
                   </h1>
-                  {/* ❌ RIMOSSO: Badge fase accanto al nome */}
-                  {/* <span
-                    className={`px-3 py-1 rounded-full text-xs font-medium ${getStageColor(
-                      plant.stage
-                    )}`}
-                  >
-                    {plant.stage || 'Non specificato'}
-                  </span> */}
                 </div>
                 <p className="text-green-800/80 italic mt-0.5 truncate">
                   {plant.species || 'Specie non indicata'}
@@ -603,17 +595,6 @@ const PlantDetail = ({ plantId, onBack, onDeleted }) => {
                   <p className="text-sm text-gray-600">Data creazione</p>
                   <p className="font-semibold">{formatDate(plant.createdAt)}</p>
                 </div>
-                {/* ❌ RIMOSSO: Blocco 'Fase' */}
-                {/* <div>
-                  <p className="text-sm text-gray-600">Fase attuale</p>
-                  <span
-                    className={`inline-block px-3 py-1 rounded-full text-sm font-medium ${getStageColor(
-                      plant.stage
-                    )}`}
-                  >
-                    {plant.stage || 'Non specificato'}
-                  </span>
-                </div> */}
               </div>
             </div>
 

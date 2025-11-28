@@ -3,6 +3,7 @@ import { Brain, CheckCircle, Leaf, ArrowLeft } from 'lucide-react';
 import { api } from '../api/axiosInstance';
 import AIIrrigationCard from '../components/AIIrrigationCard';
 
+// UTILIZZO DI UNA SOLA FONTE PER LA TEMPERATURA: weatherMap
 function getPlaceholderImage(plant) {
   const q = encodeURIComponent(plant?.species || plant?.name || 'plant');
   return `https://source.unsplash.com/featured/800x450?${q},garden,botany`;
@@ -13,20 +14,25 @@ const AIIrrigationPage = ({ onBack }) => {
   const [loading, setLoading] = useState(true);
   const [loadingPlants, setLoadingPlants] = useState(new Set());
   const [recommendations, setRecommendations] = useState({});
+  const [weatherMap, setWeatherMap] = useState({});
   const [error, setError] = useState(null);
 
-  useEffect(() => {
-    loadPlants();
-  }, []);
+  useEffect(() => { loadPlants(); }, []);
 
   const loadPlants = async () => {
+    setError(null);
+    setPlants([]);
+    setRecommendations({});
+    setWeatherMap({});
+    setLoading(true);
     try {
-      setLoading(true);
-      const { data } = await api.get('/api/piante'); // lista piante utente
+      const { data } = await api.get('/api/piante');
       setPlants(data || []);
-      setError(null);
+      data.forEach(plant => {
+        askForAdvice(plant);
+        fetchPlantWeather(plant);
+      });
     } catch (err) {
-      console.error('Errore nel caricamento piante:', err);
       setError('Errore nel caricamento delle piante');
     } finally {
       setLoading(false);
@@ -40,18 +46,31 @@ const AIIrrigationPage = ({ onBack }) => {
       const { data } = await api.post(`/api/piante/${plant.id}/ai/irrigazione`, {});
       setRecommendations(prev => ({ ...prev, [plant.id]: data }));
     } catch (err) {
-      console.error('Errore nel consiglio AI:', err);
       setRecommendations(prev => ({
         ...prev,
-        [plant.id]: { error: 'Errore nel calcolo del consiglio' }
+        [plant.id]: { error: 'Errore nel calcolo AI/meteo' }
       }));
     } finally {
       setLoadingPlants(prev => {
-        const s = new Set(prev);
-        s.delete(plant.id);
-        return s;
+        const s = new Set(prev); s.delete(plant.id); return s;
       });
     }
+  };
+
+  // Meteo reale per ogni pianta
+  const fetchPlantWeather = async (plant) => {
+    if (!plant) return;
+    try {
+      let url = null;
+      if (plant.geoLat && plant.geoLng) {
+        url = `/api/weather?lat=${plant.geoLat}&lon=${plant.geoLng}`;
+      } else if (plant.location) {
+        url = `/api/weather?city=${encodeURIComponent(plant.location)}`;
+      }
+      if (!url) return;
+      const { data } = await api.get(url);
+      setWeatherMap(prev => ({ ...prev, [plant.id]: data }));
+    } catch {/* handled as loading or fallback in card */}
   };
 
   const handleLogIrrigation = (plant) => {
@@ -60,12 +79,13 @@ const AIIrrigationPage = ({ onBack }) => {
 
   const refreshWeather = (plant) => {
     askForAdvice(plant);
+    fetchPlantWeather(plant);
   };
 
   if (loading) {
     return (
       <div className="min-h-screen bg-green-50 pt-16">
-        <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
+        <div className="w-full max-w-screen-2xl xl:px-32 lg:px-12 md:px-8 sm:px-6 px-4 py-8 mx-auto">
           <div className="flex items-center justify-center h-64">
             <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-green-600"></div>
           </div>
@@ -77,7 +97,7 @@ const AIIrrigationPage = ({ onBack }) => {
   if (error) {
     return (
       <div className="min-h-screen bg-green-50 pt-16">
-        <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
+        <div className="w-full max-w-screen-2xl xl:px-32 lg:px-12 md:px-8 sm:px-6 px-4 py-8 mx-auto">
           <div className="bg-red-50 border border-red-200 rounded-lg p-6 text-center">
             <p className="text-red-600">{error}</p>
             <button
@@ -94,8 +114,7 @@ const AIIrrigationPage = ({ onBack }) => {
 
   return (
     <div className="min-h-screen bg-green-50 pt-16">
-      <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
-
+      <div className="w-full max-w-screen-2xl xl:px-32 lg:px-12 md:px-8 sm:px-6 px-4 py-8 mx-auto">
         {/* Header */}
         <div className="mb-8">
           <div className="flex items-center space-x-4 mb-6">
@@ -110,7 +129,6 @@ const AIIrrigationPage = ({ onBack }) => {
                 <Brain className="h-8 w-8 text-white" />
               </div>
               <div>
-                {/* 🟢 TITOLO AGGIORNATO */}
                 <h1 className="text-3xl font-bold text-gray-900">
                   AI Tools → Assistente Coltivazione
                 </h1>
@@ -142,7 +160,9 @@ const AIIrrigationPage = ({ onBack }) => {
             {plants.map((plant) => {
               const img = plant.imageUrl || plant.trefleImageUrl || getPlaceholderImage(plant);
               const rec = recommendations[plant.id];
-              const weather = rec?._debug?.weather || rec?.weather || null;
+              const weather = weatherMap[plant.id] && typeof weatherMap[plant.id].temp === "number"
+                ? weatherMap[plant.id]
+                : null;
 
               return (
                 <AIIrrigationCard
@@ -150,7 +170,7 @@ const AIIrrigationPage = ({ onBack }) => {
                   plant={plant}
                   imageUrl={img}
                   loadingExternal={loadingPlants.has(plant.id)}
-                  recommendation={recommendations[plant.id]}
+                  recommendation={rec}
                   onAskAdvice={() => askForAdvice(plant)}
                   onRefreshWeather={() => refreshWeather(plant)}
                   onLogIrrigation={() => handleLogIrrigation(plant)}
@@ -161,7 +181,6 @@ const AIIrrigationPage = ({ onBack }) => {
           </div>
         )}
 
-        {/* Bottom Info */}
         <div className="mt-12 bg-gradient-to-r from-blue-600 to-purple-600 text-white rounded-2xl p-8 text-center">
           <Brain className="h-12 w-12 mx-auto mb-4" />
           <h2 className="text-2xl font-bold mb-4">

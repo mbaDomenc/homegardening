@@ -130,8 +130,6 @@ export default function ProfilePage() {
     if (!window.confirm("Rimuovere l'immagine del profilo?")) return;
 
     try {
-      // Se/Quando farai l’endpoint:
-      // await api.delete("/api/utenti/avatar");
       setUser((prev) => ({ ...prev, avatarUrl: null, avatarThumbUrl: null }));
       setUserData((prev) => ({ ...prev, avatarUrl: null, avatarThumbUrl: null }));
       setEditData((prev) => ({ ...prev, avatarUrl: null, avatarThumbUrl: null }));
@@ -149,7 +147,6 @@ export default function ProfilePage() {
           {/* HEADER */}
           <div className="relative bg-gradient-to-r from-emerald-600 to-emerald-700 px-6 sm:px-8 py-10">
             <div className="flex items-center gap-6">
-              {/* AVATAR & AZIONI (sotto la foto, senza hover) */}
 <div className="flex flex-col items-center">
   {/* Cerchio avatar */}
   <div className="h-28 w-28 rounded-full ring-4 ring-white/30 bg-white overflow-hidden flex items-center justify-center">

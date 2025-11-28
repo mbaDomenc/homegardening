@@ -1,11 +1,11 @@
 import React, { useEffect, useState } from 'react';
 import { Link, useLocation } from 'react-router-dom';
 import { Sprout, Brain, Sliders, ArrowRight, Stars, ShieldCheck } from 'lucide-react';
-import { useAuth } from '../context/AuthContext'; // 🟢 IMPORT NECESSARIO
+import { useAuth } from '../context/AuthContext'; 
 
 const HomePage = () => {
     const location = useLocation();
-    const { isAuthenticated } = useAuth(); // 🟢 RECUPERA LO STATO
+    const { isAuthenticated } = useAuth(); 
     const [showBanner, setShowBanner] = useState(false);
 
     useEffect(() => {
@@ -61,7 +61,7 @@ const HomePage = () => {
                 
                 <div className="flex flex-col sm:flex-row justify-center gap-5 animate-in fade-in slide-in-from-bottom-10 duration-1000 delay-200">
                     
-                    {/* 🟢 MOSTRA SOLO SE NON SEI LOGGATO */}
+                    {/*MOSTRA SOLO SE NON SEI LOGGATO */}
                     {!isAuthenticated && (
                         <Link to="/register" className="btn-bouncy bg-emerald-600 text-white px-10 py-4 rounded-full text-lg font-bold shadow-xl shadow-emerald-500/30 flex items-center justify-center gap-2 hover:bg-emerald-500 transition-colors">
                             Inizia Gratis <ArrowRight className="h-5 w-5" />

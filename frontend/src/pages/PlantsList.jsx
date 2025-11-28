@@ -72,7 +72,7 @@ const PlantsList = ({ onOpenDetail = () => {} }) => {
 
   // Submit form (create/update) —> ricarico sempre la lista dal server
   
-  const handleFormSubmit = async (formData, imageFile) => { // Accetta imageFile come secondo argomento
+  const handleFormSubmit = async (formData, imageFile) => { 
     try {
       let plantId = null;
 
@@ -110,7 +110,7 @@ const PlantsList = ({ onOpenDetail = () => {} }) => {
   const handleInlineSave = async (plantId, patch) => {
     try {
       await api.patch(`/api/piante/${plantId}`, patch);
-      await loadPlants();            // 🔥 ricarico lista
+      await loadPlants();            
     } catch (error) {
       console.error("Errore nell'aggiornamento:", error);
       throw error;
@@ -121,7 +121,7 @@ const PlantsList = ({ onOpenDetail = () => {} }) => {
   const handleDeletePlant = async (plantId) => {
     try {
       await api.delete(`/api/piante/${plantId}`);
-      await loadPlants();            // 🔥 ricarico lista
+      await loadPlants();            
     } catch (error) {
       console.error("Errore nell'eliminazione:", error);
       alert("Errore nell'eliminazione della pianta");
@@ -140,7 +140,7 @@ const PlantsList = ({ onOpenDetail = () => {} }) => {
   if (loading) {
     return (
       <div className="min-h-screen bg-green-50 pt-16">
-        <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
+        <div className="w-full max-w-screen-2xl xl:px-32 lg:px-12 md:px-8 sm:px-6 px-4 py-8 mx-auto">
           <div className="flex items-center justify-center h-64">
             <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-green-600"></div>
           </div>
@@ -152,7 +152,7 @@ const PlantsList = ({ onOpenDetail = () => {} }) => {
   if (error) {
     return (
       <div className="min-h-screen bg-green-50 pt-16">
-        <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
+        <div className="w-full max-w-screen-2xl xl:px-32 lg:px-12 md:px-8 sm:px-6 px-4 py-8 mx-auto">
           <div className="bg-red-50 border border-red-200 rounded-lg p-6 text-center">
             <p className="text-red-600">{error}</p>
             <button
@@ -169,7 +169,7 @@ const PlantsList = ({ onOpenDetail = () => {} }) => {
 
   return (
     <div className="min-h-screen bg-green-50 pt-16">
-      <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
+      <div className="w-full max-w-screen-2xl xl:px-32 lg:px-12 md:px-8 sm:px-6 px-4 py-8 mx-auto">
 
         {/* Header */}
         <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center mb-8">
